@@ -10,7 +10,8 @@ import numpy as np
 from geomdl import NURBS, utilities
 # [!! 修正 !!] 导入正确的 export_json 函数
 from geomdl.exchange import export_json
-
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 # --- 1. 定义文件路径 ---
 POINTS_FILE = "/home/ljh/PycharmProjects/pipe_env/final_control_points7.txt"
 WEIGHTS_FILE = "/home/ljh/PycharmProjects/pipe_env/final_weights7.txt"
@@ -75,3 +76,55 @@ try:
 
 except Exception as e:
     print(f"\n错误: 导出 XYZ 点失败。 {e}")
+
+# --- 5. [新增] 3D 可视化预览 ---
+print("\n--- 正在启动 3D 预览 ---")
+try:
+    # [FIX 1] 将列表转换为 NumPy 数组
+    eval_points_np = np.array(eval_points)
+
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # [FIX 2] 使用转换后的 numpy 数组切片
+    xs = eval_points_np[:, 0]
+    ys = eval_points_np[:, 1]
+    zs = eval_points_np[:, 2]
+
+    # 提取控制点
+    ctrl_np = np.array(control_points)
+    cx = ctrl_np[:, 0]
+    cy = ctrl_np[:, 1]
+    cz = ctrl_np[:, 2]
+
+    # 绘制曲线和控制点
+    ax.plot(xs, ys, zs, label='Generated Pipe Path', color='blue', linewidth=2)
+    ax.plot(cx, cy, cz, label='Control Polygon', color='red', linestyle='--', marker='o', markersize=4, alpha=0.5)
+    ax.scatter(xs[0], ys[0], zs[0], color='green', s=100, label='Start', marker='^')
+    ax.scatter(xs[-1], ys[-1], zs[-1], color='purple', s=100, label='End', marker='*')
+
+    ax.legend()
+
+    # ---- [关键修复] 修正 XYZ 比例 ----
+    # 计算数据的最大包围盒，确保三个轴的显示比例是 1:1:1
+    max_range = np.array([xs.max()-xs.min(), ys.max()-ys.min(), zs.max()-zs.min()]).max() / 2.0
+    mid_x = (xs.max()+xs.min()) * 0.5
+    mid_y = (ys.max()+ys.min()) * 0.5
+    mid_z = (zs.max()+zs.min()) * 0.5
+
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+    ax.set_xlabel('X axis')
+    ax.set_ylabel('Y axis')
+    ax.set_zlabel('Z axis')
+    # -------------------------------
+
+    plt.show()
+    print("预览窗口已关闭。")
+
+except Exception as e:
+    print(f"可视化失败: {e}")
+    import traceback
+    traceback.print_exc()
