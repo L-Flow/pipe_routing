@@ -348,7 +348,6 @@ class PipeRoutingEnv(gym.Env):
         self.previous_point = self.current_point
         point_new = self.current_point + delta_xyz
 
-        # 1. 计算每一步的奖励
         reward = self._calculate_reward(point_new, weight_new)
 
         self.current_point = point_new
@@ -358,13 +357,63 @@ class PipeRoutingEnv(gym.Env):
         done = False
         dist_to_target = np.linalg.norm(self.P_t_minus_2 - self.current_point)
 
-        # 2. 检查是否成功
+        # 检查是否到达目标
         if dist_to_target <= self.d_max:
             done = True
-            # [!! 这里 !!] 加上 R5 成功奖励
             reward += self.reward_weights['R5_success']
+
+            # 添加夹持点 (这是为了生成最终完整曲线)
             self.control_points.extend([self.P_t_minus_2.tolist(), self.P_t_minus_1.tolist(), self.P_t.tolist()])
             self.control_weights.extend([1.0, 1.0, 1.0])
+
+            # --- [!! 新增 !!] 终端曲率/挠率检查 ---
+            # 既然任务已完成，我们现在拥有了完整的控制点列表。
+            # 我们可以构建整条曲线，并专门检查最后这一段（连接到终点的部分）是否平滑。
+            try:
+                # 1. 构建包含夹持点的完整曲线
+                full_curve = Geomdl_NURBS(self.control_points, self.control_weights, degree=3)
+
+                # 2. 采样最后一段区域 (例如 u 从 0.9 到 1.0)
+                # 我们只关心最后这部分是否为了"硬凑"终点而产生了剧烈弯曲
+                u_values = np.linspace(0.9, 0.99, 20)  # 避开 u=1.0 防止导数不稳定
+
+                terminal_kappas = []
+                terminal_taus = []
+
+                for u in u_values:
+                    # 获取导数
+                    derivs = full_curve.get_derivatives(u, order=3)
+                    # 计算曲率和挠率
+                    k = _calculate_curvature(derivs)
+                    t = _calculate_torsion(derivs)
+
+                    terminal_kappas.append(k)
+                    terminal_taus.append(np.abs(t))
+
+                # 3. 计算终端平均值
+                avg_terminal_kappa = np.mean(terminal_kappas)
+                avg_terminal_tau = np.mean(terminal_taus)
+
+                # 4. 施加额外的惩罚
+                # 如果终端曲率过大，说明是一个"急转弯"进站
+                # 我们可以给一个比平时更大的权重，甚至抵消掉一部分 R5 奖励
+
+                # 定义终端惩罚权重 (建议比过程权重 R_kappa 更大，例如 10 倍)
+                w_terminal_kappa = self.reward_weights.get('R_kappa', 2.0) * 10.0
+                w_terminal_tau = self.reward_weights.get('R_tau', 1.0) * 10.0
+
+                terminal_penalty = - (w_terminal_kappa * avg_terminal_kappa + w_terminal_tau * avg_terminal_tau)
+
+                # 将惩罚加到当前的 reward 中
+                reward += terminal_penalty
+
+                # (可选) 打印调试信息，看看惩罚有多大
+                # print(f"终端检查: Kappa={avg_terminal_kappa:.4f}, Penalty={terminal_penalty:.2f}")
+
+            except Exception as e:
+                # 如果构建失败（极少见），忽略
+                pass
+            # --- [!! 新增结束 !!] ---
 
         if self.current_step >= self.max_steps_per_episode:
             done = True
