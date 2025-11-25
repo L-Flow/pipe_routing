@@ -158,6 +158,9 @@ class PipeRoutingEnv(gym.Env):
         self.d_max = 100.0
         self.sampling_interval_dl = 5.0
 
+        # [新增] 对齐引导的参数
+        self.guidance_dist = 300.0  # 当距离目标小于这个值时，开始给对齐奖励(建议设为 2-3 倍的 d_max)
+
         # 奖励权重 (包含流阻项)
         self.reward_weights = {
             'R1_dist': 0.1,
@@ -166,7 +169,8 @@ class PipeRoutingEnv(gym.Env):
             'R_kappa': 0.05,  # 曲率惩罚权重
             'R_tau': 0.01,  # 挠率惩罚权重
             'R4_pe': 1,
-            'R5_success': 20.0  # [!!] 这里定义了 R5
+            'R5_success': 20.0,  # [!!] 这里定义了 R5
+            'R_align': 2.0
         }
 
         # 5. 定义传感器
@@ -187,7 +191,9 @@ class PipeRoutingEnv(gym.Env):
         self.action_space = spaces.Box(low=action_low, high=action_high, dtype=np.float32)
 
         # 7. 定义 Observation Space
-        obs_dim = 3 + 3 + self.num_sensors
+        # 原来是: 3 (当前点) + 3 (目标向量) + num_sensors
+        # 现在增加: 3 (当前末端切向量)
+        obs_dim = 3 + 3 + 3 + self.num_sensors  # <--- 这里增加了 3
         obs_low = np.full(obs_dim, -np.inf)
         obs_high = np.full(obs_dim, np.inf)
         self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
@@ -227,9 +233,28 @@ class PipeRoutingEnv(gym.Env):
 
     def _get_observation(self) -> np.ndarray:
         p_current = self.current_point
+
+        # [新增] 计算当前管路末端的切向量 (Unit Tangent Vector)
+        # Agent 需要知道自己当前的"朝向"，才能决定下一步怎么拐
+        tangent_vec = p_current - self.previous_point
+        norm = np.linalg.norm(tangent_vec)
+        if norm < 1e-6:
+            # 如果是初始状态或重合，默认使用起点法向，或者上一次的有效切向
+            # 在 reset() 中，previous_point 初始化为 P_0, current 为 P_1，所以初始切向就是 N_s
+            current_tangent = self.N_s
+        else:
+            current_tangent = tangent_vec / norm
+
         vec_to_target = self.P_t_minus_2 - p_current
         surrounding_info = self._get_surrounding_info()
-        return np.concatenate([p_current, vec_to_target, surrounding_info])
+
+        # [修改] 拼接状态向量
+        return np.concatenate([
+            p_current,
+            vec_to_target,
+            current_tangent,  # <--- 加入切向量
+            surrounding_info
+        ])
 
     def _calculate_reward(self, p_new: np.ndarray, w_new: float) -> float:
         """
@@ -319,14 +344,42 @@ class PipeRoutingEnv(gym.Env):
         if all_torsions:
             R_tau = -np.mean(all_torsions)
 
+
+        R_align = 0.0
+        dist_to_target_zone = np.linalg.norm(self.P_t_minus_2 - p_new)
+
+        if dist_to_target_zone < self.guidance_dist:
+            # 1. 计算这一步的行进方向 (Agent 当前生成的切向)
+            step_vec = p_new - self.current_point
+            step_norm = np.linalg.norm(step_vec)
+
+            if step_norm > 1e-6:
+                current_heading = step_vec / step_norm
+
+                # 2. 目标的理想进入方向
+                # 注意：self.N_t 是目标处的法向量。
+                # 管路是连接到 P_t_minus_2 -> P_t_minus_1 -> P_t
+                # 这一段的方向是 (P_t - P_t_minus_2)，方向约为 -N_t
+                ideal_heading = -self.N_t
+
+                # 3. 计算余弦相似度 (Dot Product)
+                # 值域 [-1, 1]。1 表示完美平行，-1 表示反向，0 表示垂直
+                alignment_score = np.dot(current_heading, ideal_heading)
+
+                # 4. 只有当方向大致正确(>0)时才给奖励，或者直接给线性奖励
+                # 建议使用 max(0, score) 避免惩罚它的探索，只奖励正确的行为
+                R_align = max(0.0, alignment_score)
+
+                # [修改] 总奖励公式
         total_reward = (
-                self.reward_weights['R1_dist'] * R1 +
-                self.reward_weights['R2_len'] * R2 +
-                self.reward_weights['R3_obs'] * R3 +
-                self.reward_weights['R4_pe'] * R4 +
-                self.reward_weights['R_kappa'] * R_kappa +  # 流阻惩罚
-                self.reward_weights['R_tau'] * R_tau  # 流阻惩罚
-        )
+                        self.reward_weights['R1_dist'] * R1 +
+                        self.reward_weights['R2_len'] * R2 +
+                        self.reward_weights['R3_obs'] * R3 +
+                        self.reward_weights['R4_pe'] * R4 +
+                        self.reward_weights['R_kappa'] * R_kappa +
+                        self.reward_weights['R_tau'] * R_tau +
+                        self.reward_weights['R_align'] * R_align  # <--- 加入这一项
+                )
 
         return total_reward
 
