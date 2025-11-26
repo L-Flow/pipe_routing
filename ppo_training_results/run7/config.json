@@ -1,0 +1,43 @@
+{
+    "ac_kwargs":	{
+        "hidden_sizes":	[
+            256,
+            256
+        ]
+    },
+    "actor_critic":	"MLPActorCritic",
+    "clip_ratio":	0.2,
+    "env_fn":	"<function <lambda> at 0x7087e7704ea0>",
+    "epochs":	40,
+    "exp_name":	"pipe_routing_ppo_run7",
+    "gamma":	0.9,
+    "lam":	0.98,
+    "logger":	{
+        "<spinup.utils.logx.EpochLogger object at 0x7087e7705e80>":	{
+            "epoch_dict":	{},
+            "exp_name":	"pipe_routing_ppo_run7",
+            "first_row":	true,
+            "log_current_row":	{},
+            "log_headers":	[],
+            "output_dir":	"ppo_training_results/run7",
+            "output_file":	{
+                "<_io.TextIOWrapper name='ppo_training_results/run7/progress.txt' mode='w' encoding='UTF-8'>":	{
+                    "mode":	"w"
+                }
+            }
+        }
+    },
+    "logger_kwargs":	{
+        "exp_name":	"pipe_routing_ppo_run7",
+        "output_dir":	"ppo_training_results/run7"
+    },
+    "max_ep_len":	40,
+    "pi_lr":	3e-05,
+    "save_freq":	10,
+    "seed":	0,
+    "steps_per_epoch":	4000,
+    "target_kl":	0.01,
+    "train_pi_iters":	80,
+    "train_v_iters":	80,
+    "vf_lr":	0.0005
+}

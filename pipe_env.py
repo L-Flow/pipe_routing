@@ -164,7 +164,7 @@ class PipeRoutingEnv(gym.Env):
         # 奖励权重 (包含流阻项)
         self.reward_weights = {
             'R1_dist': 0.1,
-            'R2_len': 0.002,
+            'R2_len': 0.010,
             'R3_obs': 0.05,
             'R_kappa': 0.05,  # 曲率惩罚权重
             'R_tau': 0.01,  # 挠率惩罚权重
