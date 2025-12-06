@@ -4,18 +4,18 @@
 # 使用 OpenAI Spinning Up 的 PPO 算法来训练 pipe_env.py 中定义的自定义环境。
 
 import os
-# 导入 Spinning Up 的 PPO (PyTorch 版)
+
 from spinup import ppo_pytorch as ppo
 
 # 导入自定义布管环境
 from pipe_env import PipeRoutingEnv
 
 # --- 1. 定义环境参数 ---
-# (根据您的设置修改路径和坐标)
+
 
 # a) 势能图文件路径
-PE_MAP_FILE = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/assembly7_pe_leaflevel.npy"
-META_FILE = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/assembly7_pe_meta.json"
+PE_MAP_FILE = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/cylindrical_pe_leaflevel.npy"
+META_FILE = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/cylindrical_pe_meta.json"
 
 # b) 检查文件是否存在
 if not (os.path.exists(PE_MAP_FILE) and os.path.exists(META_FILE)):
@@ -26,8 +26,8 @@ if not (os.path.exists(PE_MAP_FILE) and os.path.exists(META_FILE)):
 # c) 起点和终点标定
 START_PT = [-302.43, 360.42, -893.05]
 START_N = [-1, 1.19, 0]
-TARGET_PT = [302.43, 360.42, -893.05]
-TARGET_N = [1, 1.19, 0]
+TARGET_PT = [460.44, 212.48, -612.75]
+TARGET_N = [1, -0.9, 0]
 PIPE_DIAMETER = 10.0
 
 # --- 2. 创建 env_fn (环境函数) ---
@@ -67,7 +67,7 @@ vf_lr = 5e-4         # Critic (Value F) 学习率
 # 论文: 5000 训练回合 (episodes)
 # 论文: 每回合最多 20 步 (steps)
 total_episodes = 4000
-max_ep_len = 40   #TODO：调试中
+max_ep_len = 35   #TODO：调试中
 
 # Spinning Up 按“步数”来组织
 # 计算出 PPO 运行的总交互步数：
@@ -120,3 +120,5 @@ if __name__ == "__main__":
     )
 
     print("--- 训练完成 ---")
+
+    # 命令行输入可查看迭代图：python -m spinup.run plot /home/ljh/PycharmProjects/pipe_env/ppo_training_results

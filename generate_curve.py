@@ -11,14 +11,15 @@ from geomdl import NURBS, utilities
 # [!! 修正 !!] 导入正确的 export_json 函数
 from geomdl.exchange import export_json
 import matplotlib.pyplot as plt
+from geomdl import operations
 from mpl_toolkits.mplot3d import Axes3D
 # --- 1. 定义文件路径 ---
-POINTS_FILE = "/home/ljh/PycharmProjects/pipe_env/final_control_points7.txt"
-WEIGHTS_FILE = "/home/ljh/PycharmProjects/pipe_env/final_weights7.txt"
+POINTS_FILE = "/home/ljh/PycharmProjects/pipe_env/final_control_points8.txt"
+WEIGHTS_FILE = "/home/ljh/PycharmProjects/pipe_env/final_weights8.txt"
 
 # 定义两个输出文件
-OUTPUT_CURVE_JSON = "final_nurbs_curve7.json"  # 曲线的数学定义
-OUTPUT_CURVE_POINTS_TXT = "final_curve_XYZ_points7.txt"  # SolidWorks 导入文件
+OUTPUT_CURVE_JSON = "final_nurbs_curve8.json"  # 曲线的数学定义
+OUTPUT_CURVE_POINTS_TXT = "final_curve_XYZ_points8.txt"  # SolidWorks 导入文件
 
 # --- 2. 加载数据 ---
 print(f"--- 正在从文件加载数据 ---")
@@ -128,3 +129,7 @@ except Exception as e:
     print(f"可视化失败: {e}")
     import traceback
     traceback.print_exc()
+
+
+#--6,打印生成的管路轴线长度--
+print('生成管路的轴线为：',operations.length_curve(curve),'mm')

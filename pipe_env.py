@@ -120,15 +120,15 @@ class PipeRoutingEnv(gym.Env):
     metadata = {'render.modes': ['human']}
 
     def __init__(self,
-                 pe_map_path: str,
-                 meta_path: str,
-                 start_point: list,
+                 pe_map_path: str, #势能图存储路径
+                 meta_path: str,  #meta文件路径
+                 start_point: list, #起始点
                  start_normal: list,
                  target_point: list,
                  target_normal: list,
-                 pipe_diameter: float = 10.0):
+                 pipe_diameter: float = 10.0,
+                 reynolds_num: float = 20000.0):
         super(PipeRoutingEnv, self).__init__()
-
         # 1. 加载环境数据
         print(f"Loading PE map from {pe_map_path}...")
         self.pe_map = np.load(pe_map_path)
@@ -147,6 +147,8 @@ class PipeRoutingEnv(gym.Env):
         self.P_t = np.array(target_point)
         self.N_t = np.array(target_normal) / np.linalg.norm(target_normal)
 
+        self.pipe_radius = pipe_diameter / 2.0
+        self.Re = reynolds_num  # 雷诺数
         # 3. 预先计算端点
         self.P_0 = self.P_s + self.N_s * pipe_diameter
         self.P_1 = self.P_0 + self.N_s * pipe_diameter * 2
@@ -158,19 +160,20 @@ class PipeRoutingEnv(gym.Env):
         self.d_max = 100.0
         self.sampling_interval_dl = 5.0
 
-        # [新增] 对齐引导的参数
+        # 对齐引导的参数
         self.guidance_dist = 300.0  # 当距离目标小于这个值时，开始给对齐奖励(建议设为 2-3 倍的 d_max)
 
-        # 奖励权重 (包含流阻项)
+        # 奖励权重
         self.reward_weights = {
             'R1_dist': 0.1,
             'R2_len': 0.010,
-            'R3_obs': 0.05,
-            'R_kappa': 0.05,  # 曲率惩罚权重
+            'R3_obs': 0.10,
+            # 'R_kappa': 0.05,  # 曲率惩罚权重
+            'R_dean': 0.001,
             'R_tau': 0.01,  # 挠率惩罚权重
             'R4_pe': 1,
             'R5_success': 20.0,  # [!!] 这里定义了 R5
-            'R_align': 2.0
+            'R_align': 3.0
         }
 
         # 5. 定义传感器
@@ -288,11 +291,12 @@ class PipeRoutingEnv(gym.Env):
         self.current_curve_length = new_total_length
         R2 = -segment_length
 
-        # R3, R4, R_kappa, R_tau
+        # R3, R4, R_kappa(已删除), R_tau,R_dean
         R3 = 0.0
         R4_potentials = []
-        all_curvatures = []
         all_torsions = []
+        all_sqrt_curvatures = []
+        all_dean_numbers = []
 
         if segment_length <= 1e-3:
             num_samples = 0
@@ -328,6 +332,12 @@ class PipeRoutingEnv(gym.Env):
 
                         all_curvatures.append(k)
                         all_torsions.append(np.abs(t))
+                        if k > 1e-9:
+                            sq_k = np.sqrt(k)
+
+                        else:
+                            sq_k = 0.0
+                        all_dean_numbers.append(sq_k)
                     except Exception:
                         pass
 
@@ -338,9 +348,13 @@ class PipeRoutingEnv(gym.Env):
 
         R_kappa = 0.0
         R_tau = 0.0
+        R_dean_proxy = 0.0
+        if all_sqrt_curvatures:
+                # 这里我们只惩罚 sqrt(k)，不需要乘 Re
+                # 这样数值范围很小，权重好调
+            R_dean_proxy = -np.mean(all_sqrt_curvatures)
 
-        if all_curvatures:
-            R_kappa = -np.mean(all_curvatures)
+
         if all_torsions:
             R_tau = -np.mean(all_torsions)
 
@@ -375,10 +389,10 @@ class PipeRoutingEnv(gym.Env):
                         self.reward_weights['R1_dist'] * R1 +
                         self.reward_weights['R2_len'] * R2 +
                         self.reward_weights['R3_obs'] * R3 +
-                        self.reward_weights['R4_pe'] * R4 +
-                        self.reward_weights['R_kappa'] * R_kappa +
+                        self.reward_weights['R4_pe'] * R4  +
                         self.reward_weights['R_tau'] * R_tau +
-                        self.reward_weights['R_align'] * R_align  # <--- 加入这一项
+                        self.reward_weights['R_align'] * R_align+# <--- 加入这一项
+                        self.reward_weights['R_dean'] * R_dean_proxy
                 )
 
         return total_reward
@@ -488,8 +502,8 @@ class PipeRoutingEnv(gym.Env):
 
 # --- (可选) 环境测试 ---
 if __name__ == "__main__":
-    pe_map_file = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/assembly7_pe_leaflevel.npy"
-    meta_file = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/assembly7_pe_meta.json"
+    pe_map_file = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/cylindrical_pe_leaflevel.npy"
+    meta_file = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/cylindrical_pe_meta.json"
 
     if not (os.path.exists(pe_map_file) and os.path.exists(meta_file)):
         print(f"错误：找不到环境文件。")
@@ -498,8 +512,8 @@ if __name__ == "__main__":
         # (这里的坐标只是测试用的，训练时会用 train.py 里的坐标)
         start_pt = [-302.43, 360.42, -893.05]
         start_n = [-1, 1.19, 0]
-        target_pt = [302.43, 360.42, -893.05]
-        target_n = [1, 1.19, 0]
+        target_pt = [460.44, 212.48, -612.75]
+        target_n = [1, -0.9, 0]
 
         env = PipeRoutingEnv(
             pe_map_path=pe_map_file,

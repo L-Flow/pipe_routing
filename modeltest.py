@@ -15,14 +15,14 @@ from pipe_env import PipeRoutingEnv
 # --- 1. 定义环境参数 (必须与 train.py 完全一致!) ---
 
 # a) 势能图文件路径
-PE_MAP_FILE = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/assembly7_pe_leaflevel.npy"
-META_FILE = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/assembly7_pe_meta.json"
+PE_MAP_FILE = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/cylindrical_pe_leaflevel.npy"
+META_FILE = "/home/ljh/PycharmProjects/octree_test1025/out_octree_pe/cylindrical_pe_meta.json"
 
 # b) 起点和终点标定
 START_PT = [-302.43, 360.42, -893.05]
 START_N = [-1, 1.19, 0]
-TARGET_PT = [302.43, 360.42, -893.05]
-TARGET_N = [1, 1.19, 0]
+TARGET_PT = [460.44, 212.48, -612.75]
+TARGET_N = [1, -0.9, 0]
 PIPE_DIAMETER = 10.0
 
 # c) 定义 env_fn (与 train.py 相同)
@@ -96,8 +96,8 @@ def run_trained_agent():
     print(f"成功生成管线！总共 {len(final_control_points)} 个控制点。")
 
     # 8. 保存控制点和权重到文件
-    output_file_pts = "final_control_points7.txt"
-    output_file_wts = "final_weights7.txt"
+    output_file_pts = "final_control_points8.txt"
+    output_file_wts = "final_weights8.txt"
 
     np.savetxt(output_file_pts, final_control_points, fmt="%.6f")
     np.savetxt(output_file_wts, final_weights, fmt="%.6f")
